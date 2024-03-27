@@ -97,22 +97,23 @@ func handleWorkerWS(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Send the welcome message
-	welcMsg := message.TypedMessage[message.ServerInfo]{
+	mb := message.NewMessageBuffer(conn)
+	_, err = message.Send[message.ServerInfo](mb, &message.TypedMessage[message.ServerInfo]{
 		Type: message.MTServerInfo,
 		Message: message.ServerInfo{
 			ServerName:    "blegh",
 			ServerVersion: "0.1.0",
 			Message:       "Welcome to blegh",
 		},
-	}
-	if err = conn.WriteJSON(welcMsg); err != nil {
+	})
+	if err != nil {
 		log.Printf("Failed to send welcome message: %v", err)
 		return
 	}
 
 	// Read the message from the worker
-	info := message.TypedMessage[message.WorkerInfo]{}
-	if err = conn.ReadJSON(&info); err != nil {
+	info, err := message.Receive[message.WorkerInfo](mb)
+	if err != nil {
 		log.Printf("Failed to read registration message: %v", err)
 		return
 	}
@@ -125,17 +126,17 @@ func handleWorkerWS(w http.ResponseWriter, r *http.Request) {
 	worker := &Worker{
 		Info: info.Message,
 		Conn: conn,
-		Mbuf: message.NewMessageBuffer(conn),
+		Mbuf: mb,
 	}
 	hub.RegisterWorker(worker)
 
 	// Send the registration response
-	ackMsg := message.TypedMessage[message.Ack]{
+	_, err = message.Send[message.Ack](mb, &message.TypedMessage[message.Ack]{
 		Type:    message.MTAck,
 		Id:      info.Id,
 		Message: message.Ack{Ok: true, Message: "Registered"},
-	}
-	if err = conn.WriteJSON(ackMsg); err != nil {
+	})
+	if err != nil {
 		http.Error(w, "Failed to send registration response", http.StatusInternalServerError)
 		return
 	}

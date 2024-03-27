@@ -2,6 +2,7 @@ package message
 
 import (
 	"encoding/json"
+	"sync"
 
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
@@ -14,6 +15,8 @@ func NewId() string {
 type MessageBuffer struct {
 	conn       *websocket.Conn
 	recvBuffer map[string]*TypedMessage[json.RawMessage]
+	connLock   sync.Mutex
+	bufferLock sync.Mutex
 }
 
 func NewMessageBuffer(conn *websocket.Conn) *MessageBuffer {
@@ -27,6 +30,10 @@ func Send[T any](mb *MessageBuffer, msg *TypedMessage[T]) (string, error) {
 	if msg.Id == "" {
 		msg.Id = NewId()
 	}
+
+	mb.connLock.Lock()
+	defer mb.connLock.Unlock()
+
 	if err := mb.conn.WriteJSON(msg); err != nil {
 		return "", err
 	}
@@ -42,22 +49,39 @@ func castMessage[T any](msg *TypedMessage[json.RawMessage]) *TypedMessage[T] {
 	return m
 }
 
+func Receive[T any](mb *MessageBuffer) (*TypedMessage[T], error) {
+	var msg TypedMessage[T]
+
+	mb.connLock.Lock()
+	defer mb.connLock.Unlock()
+
+	if err := mb.conn.ReadJSON(&msg); err != nil {
+		return nil, err
+	}
+	return &msg, nil
+}
+
 func ReceiveId[T any](mb *MessageBuffer, id string) (*TypedMessage[T], error) {
 	for {
+		mb.bufferLock.Lock()
 		if msg, ok := mb.recvBuffer[id]; ok {
 			delete(mb.recvBuffer, id)
+			mb.bufferLock.Unlock()
 			return castMessage[T](msg), nil
 		}
+		mb.bufferLock.Unlock()
 
-		var msg TypedMessage[json.RawMessage]
-		if err := mb.conn.ReadJSON(&msg); err != nil {
+		msg, err := Receive[json.RawMessage](mb)
+		if err != nil {
 			return nil, err
 		}
 
 		if msg.Id == id {
-			return castMessage[T](&msg), nil
+			return castMessage[T](msg), nil
 		}
 
-		mb.recvBuffer[msg.Id] = &msg
+		mb.bufferLock.Lock()
+		mb.recvBuffer[msg.Id] = msg
+		mb.bufferLock.Unlock()
 	}
 }
