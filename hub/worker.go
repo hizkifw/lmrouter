@@ -18,15 +18,16 @@ var upgrader = websocket.Upgrader{
 type Worker struct {
 	Info message.WorkerInfo
 	Conn *websocket.Conn
+	Mbuf *message.MessageBuffer
 }
 
 func (w *Worker) RequestCompletions(cr message.CompletionsRequest, wr http.ResponseWriter) error {
 	// Request completions from the worker
-	m := message.TypedMessage[message.CompletionsRequest]{
-		Type:    "completions_request",
+	id, err := message.Send[message.CompletionsRequest](w.Mbuf, &message.TypedMessage[message.CompletionsRequest]{
+		Type:    message.MTCompletionsRequest,
 		Message: cr,
-	}
-	if err := w.Conn.WriteJSON(m); err != nil {
+	})
+	if err != nil {
 		return fmt.Errorf("failed to send completions request to worker: %w", err)
 	}
 
@@ -43,8 +44,8 @@ func (w *Worker) RequestCompletions(cr message.CompletionsRequest, wr http.Respo
 	processing := true
 	headersSent := false
 	for processing {
-		resp := message.TypedMessage[message.CompletionsResponse]{}
-		if err := w.Conn.ReadJSON(&resp); err != nil {
+		resp, err := message.ReceiveId[message.CompletionsResponse](w.Mbuf, id)
+		if err != nil {
 			return fmt.Errorf("failed to read response from worker: %w", err)
 		}
 		if resp.Type != message.MTCompletionsResponse {
@@ -124,12 +125,14 @@ func handleWorkerWS(w http.ResponseWriter, r *http.Request) {
 	worker := &Worker{
 		Info: info.Message,
 		Conn: conn,
+		Mbuf: message.NewMessageBuffer(conn),
 	}
 	hub.RegisterWorker(worker)
 
 	// Send the registration response
 	ackMsg := message.TypedMessage[message.Ack]{
 		Type:    message.MTAck,
+		Id:      info.Id,
 		Message: message.Ack{Ok: true, Message: "Registered"},
 	}
 	if err = conn.WriteJSON(ackMsg); err != nil {

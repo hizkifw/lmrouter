@@ -47,32 +47,29 @@ func RunAgent(hubAddr string) error {
 
 		log.Printf("Connecting to server: %#v", serverInfo.Message)
 
+		mb := message.NewMessageBuffer(c)
+
 		// Send worker info
-		workerInfo := message.TypedMessage[message.WorkerInfo]{
+		id, err := message.Send[message.WorkerInfo](mb, &message.TypedMessage[message.WorkerInfo]{
 			Type:    message.MTWorkerInfo,
 			Message: message.WorkerInfo{WorkerName: "worker1"},
-		}
-		if err := c.WriteJSON(workerInfo); err != nil {
+		})
+		if err != nil {
 			log.Printf("failed to write worker info: %v", err)
 			return
 		}
 
 		// Wait for ack
-		ack := message.TypedMessage[message.Ack]{}
-		if err := c.ReadJSON(&ack); err != nil {
+		ackMsg, err := message.ReceiveId[message.Ack](mb, id)
+		if err != nil {
 			log.Printf("failed to read ack: %v", err)
 			return
 		}
-		if ack.Type != message.MTAck {
-			log.Printf("expected ack message, got %v", ack.Type)
+		if !ackMsg.Message.Ok {
+			log.Printf("registration failed: %v", ackMsg.Message.Message)
 			return
 		}
-		if !ack.Message.Ok {
-			log.Printf("registration failed: %v", ack.Message.Message)
-			return
-		}
-
-		log.Printf("Registered worker: %v", ack.Message.Message)
+		log.Printf("Registered worker: %v", ackMsg.Message.Message)
 
 		// Wait for completions request
 		for {
@@ -86,10 +83,6 @@ func RunAgent(hubAddr string) error {
 				return
 			}
 			log.Printf("Received completions request: %#v", req.Message)
-
-			// Perform completion
-			// POST to http://localhost:5000/v1/completions
-			// with the completions request
 
 			// Create a new HTTP client
 			client := &http.Client{}
@@ -144,6 +137,7 @@ func RunAgent(hubAddr string) error {
 					// Unmarshal the response body into a CompletionsResponse
 					compResp := message.TypedMessage[message.CompletionsResponse]{
 						Type: message.MTCompletionsResponse,
+						Id:   req.Id,
 					}
 					json.Unmarshal([]byte(line), &compResp.Message)
 
@@ -154,6 +148,7 @@ func RunAgent(hubAddr string) error {
 				// Unmarshal the response body into a CompletionsResponse
 				compResp := message.TypedMessage[message.CompletionsResponse]{
 					Type: message.MTCompletionsResponse,
+					Id:   req.Id,
 				}
 				json.NewDecoder(resp.Body).Decode(&compResp.Message)
 

@@ -12,6 +12,7 @@ const (
 
 type TypedMessage[T any] struct {
 	Type    MessageType `json:"type"`
+	Id      string      `json:"id"`
 	Message T           `json:"message"`
 }
 
