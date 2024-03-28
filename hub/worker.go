@@ -1,11 +1,13 @@
 package hub
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"github.com/hizkifw/lmrouter/message"
 )
@@ -16,12 +18,13 @@ var upgrader = websocket.Upgrader{
 }
 
 type Worker struct {
+	Id   uuid.UUID
 	Info message.WorkerInfo
 	Conn *websocket.Conn
 	Mbuf *message.MessageBuffer
 }
 
-func (w *Worker) RequestCompletions(cr message.CompletionsRequest, wr http.ResponseWriter) error {
+func (w *Worker) RequestCompletions(cr message.CompletionsRequest, wr http.ResponseWriter, ctx context.Context) error {
 	// Request completions from the worker
 	id, err := message.Send[message.CompletionsRequest](w.Mbuf, &message.TypedMessage[message.CompletionsRequest]{
 		Type:    message.MTCompletionsRequest,
@@ -44,7 +47,7 @@ func (w *Worker) RequestCompletions(cr message.CompletionsRequest, wr http.Respo
 	processing := true
 	headersSent := false
 	for processing {
-		resp, err := message.ReceiveId[message.CompletionsResponse](w.Mbuf, id)
+		resp, err := message.ReceiveId[message.CompletionsResponse](w.Mbuf, id, ctx)
 		if err != nil {
 			return fmt.Errorf("failed to read response from worker: %w", err)
 		}
@@ -86,9 +89,7 @@ func (w *Worker) RequestCompletions(cr message.CompletionsRequest, wr http.Respo
 	return nil
 }
 
-func handleWorkerWS(w http.ResponseWriter, r *http.Request) {
-	log.Printf("Incoming worker websocket connection")
-
+func handleWorkerWS(hub *Hub, w http.ResponseWriter, r *http.Request) {
 	// Upgrade the connection to a websocket
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -98,6 +99,8 @@ func handleWorkerWS(w http.ResponseWriter, r *http.Request) {
 
 	// Send the welcome message
 	mb := message.NewMessageBuffer(conn)
+	go mb.RecvLoop()
+
 	_, err = message.Send[message.ServerInfo](mb, &message.TypedMessage[message.ServerInfo]{
 		Type: message.MTServerInfo,
 		Message: message.ServerInfo{
@@ -112,7 +115,7 @@ func handleWorkerWS(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Read the message from the worker
-	info, err := message.Receive[message.WorkerInfo](mb)
+	info, err := message.ReceiveType[message.WorkerInfo](mb, message.MTWorkerInfo, r.Context())
 	if err != nil {
 		log.Printf("Failed to read registration message: %v", err)
 		return
@@ -124,6 +127,7 @@ func handleWorkerWS(w http.ResponseWriter, r *http.Request) {
 
 	// Register the worker
 	worker := &Worker{
+		Id:   uuid.New(),
 		Info: info.Message,
 		Conn: conn,
 		Mbuf: mb,
@@ -134,7 +138,7 @@ func handleWorkerWS(w http.ResponseWriter, r *http.Request) {
 	_, err = message.Send[message.Ack](mb, &message.TypedMessage[message.Ack]{
 		Type:    message.MTAck,
 		Id:      info.Id,
-		Message: message.Ack{Ok: true, Message: "Registered"},
+		Message: message.Ack{Ok: true, Message: worker.Id.String()},
 	})
 	if err != nil {
 		http.Error(w, "Failed to send registration response", http.StatusInternalServerError)

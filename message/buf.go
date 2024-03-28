@@ -1,8 +1,11 @@
 package message
 
 import (
+	"context"
 	"encoding/json"
+	"log"
 	"sync"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
@@ -15,7 +18,8 @@ func NewId() string {
 type MessageBuffer struct {
 	conn       *websocket.Conn
 	recvBuffer map[string]*TypedMessage[json.RawMessage]
-	connLock   sync.Mutex
+	recvLock   sync.Mutex
+	sendLock   sync.Mutex
 	bufferLock sync.Mutex
 }
 
@@ -26,13 +30,27 @@ func NewMessageBuffer(conn *websocket.Conn) *MessageBuffer {
 	}
 }
 
+func (mb *MessageBuffer) RecvLoop() {
+	for {
+		msg, err := receive[json.RawMessage](mb)
+		if err != nil {
+			log.Printf("failed to receive message: %v", err)
+			return
+		}
+
+		mb.bufferLock.Lock()
+		mb.recvBuffer[msg.Id] = msg
+		mb.bufferLock.Unlock()
+	}
+}
+
 func Send[T any](mb *MessageBuffer, msg *TypedMessage[T]) (string, error) {
 	if msg.Id == "" {
 		msg.Id = NewId()
 	}
 
-	mb.connLock.Lock()
-	defer mb.connLock.Unlock()
+	mb.sendLock.Lock()
+	defer mb.sendLock.Unlock()
 
 	if err := mb.conn.WriteJSON(msg); err != nil {
 		return "", err
@@ -49,11 +67,11 @@ func castMessage[T any](msg *TypedMessage[json.RawMessage]) *TypedMessage[T] {
 	return m
 }
 
-func Receive[T any](mb *MessageBuffer) (*TypedMessage[T], error) {
+func receive[T any](mb *MessageBuffer) (*TypedMessage[T], error) {
 	var msg TypedMessage[T]
 
-	mb.connLock.Lock()
-	defer mb.connLock.Unlock()
+	mb.recvLock.Lock()
+	defer mb.recvLock.Unlock()
 
 	if err := mb.conn.ReadJSON(&msg); err != nil {
 		return nil, err
@@ -61,7 +79,23 @@ func Receive[T any](mb *MessageBuffer) (*TypedMessage[T], error) {
 	return &msg, nil
 }
 
-func ReceiveId[T any](mb *MessageBuffer, id string) (*TypedMessage[T], error) {
+func ReceiveType[T any](mb *MessageBuffer, typ MessageType, ctx context.Context) (*TypedMessage[T], error) {
+	for {
+		mb.bufferLock.Lock()
+		for id, msg := range mb.recvBuffer {
+			if msg.Type == typ {
+				delete(mb.recvBuffer, id)
+				mb.bufferLock.Unlock()
+				return castMessage[T](msg), nil
+			}
+		}
+		mb.bufferLock.Unlock()
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+func ReceiveId[T any](mb *MessageBuffer, id string, ctx context.Context) (*TypedMessage[T], error) {
+	// TODO: handle context cancellation
 	for {
 		mb.bufferLock.Lock()
 		if msg, ok := mb.recvBuffer[id]; ok {
@@ -70,18 +104,6 @@ func ReceiveId[T any](mb *MessageBuffer, id string) (*TypedMessage[T], error) {
 			return castMessage[T](msg), nil
 		}
 		mb.bufferLock.Unlock()
-
-		msg, err := Receive[json.RawMessage](mb)
-		if err != nil {
-			return nil, err
-		}
-
-		if msg.Id == id {
-			return castMessage[T](msg), nil
-		}
-
-		mb.bufferLock.Lock()
-		mb.recvBuffer[msg.Id] = msg
-		mb.bufferLock.Unlock()
+		time.Sleep(10 * time.Millisecond)
 	}
 }

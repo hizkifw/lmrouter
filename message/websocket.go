@@ -3,9 +3,10 @@ package message
 type MessageType string
 
 const (
+	MTAck                 MessageType = "ack"
+	MTPing                MessageType = "ping"
 	MTServerInfo          MessageType = "server_info"
 	MTWorkerInfo          MessageType = "worker_info"
-	MTAck                 MessageType = "ack"
 	MTCompletionsRequest  MessageType = "completions_request"
 	MTCompletionsResponse MessageType = "completions_response"
 )

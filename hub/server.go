@@ -6,10 +6,19 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/hizkifw/lmrouter/message"
 )
 
 func RunServer(addr string) error {
+	// Create the hub
+	var hub = Hub{
+		workers: make(map[uuid.UUID]*Worker),
+	}
+
+	// Begin background processes
+	go hub.PingLoop()
+
 	// Handle the completions endpoint
 	http.HandleFunc("/v1/completions", func(w http.ResponseWriter, r *http.Request) {
 		// Parse the completions request
@@ -20,12 +29,12 @@ func RunServer(addr string) error {
 		}
 
 		// Request completions from the workers
-		hub.RequestCompletions(req, w)
+		hub.RequestCompletions(req, w, r.Context())
 	})
 
 	// Handle the worker websocket endpoint
 	http.HandleFunc("/internal/v1/worker/ws", func(w http.ResponseWriter, r *http.Request) {
-		handleWorkerWS(w, r)
+		handleWorkerWS(&hub, w, r)
 	})
 
 	server := &http.Server{
