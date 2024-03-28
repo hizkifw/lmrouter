@@ -19,6 +19,10 @@ func queryModels(opts *AgentOpts, client *http.Client) ([]message.Model, error) 
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
+	if opts.InferenceAuthorization != "" {
+		httpReq.Header.Set("Authorization", opts.InferenceAuthorization)
+	}
+
 	resp, err := client.Do(httpReq)
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
@@ -53,6 +57,10 @@ func handleCompletions(
 	if err != nil {
 		log.Printf("failed to create request: %v", err)
 		return
+	}
+
+	if opts.InferenceAuthorization != "" {
+		httpReq.Header.Set("Authorization", opts.InferenceAuthorization)
 	}
 
 	// Set the Content-Type header
@@ -104,17 +112,33 @@ func handleCompletions(
 		} else {
 			continue
 		}
-
-		// Unmarshal the response body into a CompletionsResponse
-		compResp := message.TypedMessage[message.CompletionsResponse]{
-			Type: message.MTCompletionsResponse,
-			Id:   req.Id,
+		if bytes.HasSuffix(line, []byte("\n")) {
+			line = line[:len(line)-1]
 		}
-		json.Unmarshal([]byte(line), &compResp.Message)
+
+		// Skip [DONE] message from OpenAI
+		if bytes.Equal(line, []byte("[DONE]")) {
+			break
+		}
+
+		// Construct a CompletionsResponse
+		compResp := message.TypedMessage[json.RawMessage]{
+			Type:    message.MTCompletionsResponse,
+			Id:      req.Id,
+			Message: line,
+		}
 
 		// Send the completions response back to the server
-		if _, err := message.Send[message.CompletionsResponse](mb, &compResp); err != nil {
+		if _, err := message.Send[json.RawMessage](mb, &compResp); err != nil {
 			log.Printf("failed to send completions response: %v", err)
 		}
+	}
+
+	if _, err := message.Send[string](mb, &message.TypedMessage[string]{
+		Type:    message.MTCompletionsDone,
+		Id:      req.Id,
+		Message: "done",
+	}); err != nil {
+		log.Printf("failed to send completions done message: %v", err)
 	}
 }

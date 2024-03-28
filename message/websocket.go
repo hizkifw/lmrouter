@@ -9,6 +9,7 @@ const (
 	MTWorkerInfo          MessageType = "worker_info"
 	MTCompletionsRequest  MessageType = "completions_request"
 	MTCompletionsResponse MessageType = "completions_response"
+	MTCompletionsDone     MessageType = "completions_done"
 )
 
 type TypedMessage[T any] struct {

@@ -19,6 +19,10 @@ type AgentOpts struct {
 	// InferenceAddr is the address of the inference server
 	InferenceAddr url.URL `arg:"--inference" help:"address of the OpenAI-compatible inference server" default:"http://localhost:5000"`
 
+	// InferenceAuthorization is the value used for the Authorization header
+	// when querying the inference server
+	InferenceAuthorization string `arg:"--inference-authorization,env:INFERENCE_AUTHORIZATION" help:"value for the Authorization header when querying the inference server (e.g. Bearer abc)"`
+
 	// WorkerName is the name of the worker
 	WorkerName string `arg:"--name" help:"name of the worker" default:"worker"`
 }

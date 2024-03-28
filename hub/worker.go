@@ -76,9 +76,12 @@ func (w *Worker) RequestCompletions(cr message.CompletionsRequest, wr http.Respo
 	processing := true
 	headersSent := false
 	for processing {
-		resp, err := message.ReceiveId[message.CompletionsResponse](w.mbuf, id, ctx)
+		resp, err := message.ReceiveId[json.RawMessage](w.mbuf, id, ctx)
 		if err != nil {
 			return fmt.Errorf("failed to read response from worker: %w", err)
+		}
+		if resp.Type == message.MTCompletionsDone {
+			return nil
 		}
 		if resp.Type != message.MTCompletionsResponse {
 			return fmt.Errorf("expected completions_response message, got %v", resp.Type)
@@ -94,12 +97,7 @@ func (w *Worker) RequestCompletions(cr message.CompletionsRequest, wr http.Respo
 			wr.Write([]byte("data: "))
 		}
 
-		respBytes, err := json.Marshal(resp.Message)
-		if err != nil {
-			return fmt.Errorf("failed to marshal response: %w", err)
-		}
-
-		wr.Write(respBytes)
+		wr.Write(resp.Message)
 
 		if cr.Stream {
 			wr.Write([]byte("\n\n"))
@@ -107,10 +105,6 @@ func (w *Worker) RequestCompletions(cr message.CompletionsRequest, wr http.Respo
 				f.Flush()
 			}
 		} else {
-			processing = false
-		}
-
-		if len(resp.Message.Choices) > 0 && resp.Message.Choices[0].FinishReason != nil {
 			processing = false
 		}
 	}

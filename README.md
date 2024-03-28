@@ -31,7 +31,7 @@ there is no need to port forward agent nodes.
 
 Implemented:
 
-- `/v1/completions` endpoint (partial)
+- `/v1/completions` endpoint
 - `/v1/models` endpoint
 - SSE streaming for completions endpoint
 - Automatic selection of agent based on available models
