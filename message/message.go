@@ -1,22 +1,32 @@
 package message
 
 type CompletionsRequest struct {
-	Model       string   `json:"model"`
-	Prompt      string   `json:"prompt"`
-	MaxTokens   int      `json:"max_tokens"`
-	Temperature float32  `json:"temperature"`
-	TopP        float32  `json:"top_p"`
-	Stop        []string `json:"stop"`
-	Stream      bool     `json:"stream"`
+	Model            string              `json:"model"`
+	Prompt           string              `json:"prompt"`
+	Echo             bool                `json:"echo,omitempty"`
+	FrequencyPenalty *float32            `json:"frequency_penalty,omitempty"`
+	LogitBias        *map[string]float32 `json:"logit_bias,omitempty"`
+	Logprobs         *int                `json:"logprobs,omitempty"`
+	MaxTokens        *int                `json:"max_tokens,omitempty"`
+	N                *int                `json:"n,omitempty"`
+	PresencePenalty  *float32            `json:"presence_penalty,omitempty"`
+	Seed             *int                `json:"seed,omitempty"`
+	Stop             *interface{}        `json:"stop,omitempty"`
+	Stream           bool                `json:"stream"`
+	Suffix           *string             `json:"suffix,omitempty"`
+	Temperature      *float32            `json:"temperature,omitempty"`
+	TopP             *float32            `json:"top_p,omitempty"`
+	User             string              `json:"user,omitempty"`
 }
 
 type CompletionsResponse struct {
-	ID      string              `json:"id"`
-	Object  string              `json:"object"`
-	Created int64               `json:"created"`
-	Model   string              `json:"model"`
-	Choices []CompletionsChoice `json:"choices"`
-	Usage   *CompletionsUsage   `json:"usage,omitempty"`
+	ID                string              `json:"id"`
+	Object            string              `json:"object"`
+	Created           int64               `json:"created"`
+	Model             string              `json:"model"`
+	SystemFingerprint *string             `json:"system_fingerprint,omitempty"`
+	Choices           []CompletionsChoice `json:"choices"`
+	Usage             *CompletionsUsage   `json:"usage,omitempty"`
 }
 
 type CompletionsChoice struct {
