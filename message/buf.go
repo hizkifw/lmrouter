@@ -90,12 +90,16 @@ func ReceiveType[T any](mb *MessageBuffer, typ MessageType, ctx context.Context)
 			}
 		}
 		mb.bufferLock.Unlock()
+
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+
 		time.Sleep(10 * time.Millisecond)
 	}
 }
 
 func ReceiveId[T any](mb *MessageBuffer, id string, ctx context.Context) (*TypedMessage[T], error) {
-	// TODO: handle context cancellation
 	for {
 		mb.bufferLock.Lock()
 		if msg, ok := mb.recvBuffer[id]; ok {
@@ -104,6 +108,11 @@ func ReceiveId[T any](mb *MessageBuffer, id string, ctx context.Context) (*Typed
 			return castMessage[T](msg), nil
 		}
 		mb.bufferLock.Unlock()
+
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+
 		time.Sleep(10 * time.Millisecond)
 	}
 }

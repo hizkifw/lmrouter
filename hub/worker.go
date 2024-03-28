@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"sync"
 
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
@@ -22,9 +23,27 @@ type Worker struct {
 	Info message.WorkerInfo
 	Conn *websocket.Conn
 	Mbuf *message.MessageBuffer
+
+	activeTasks     int
+	activeTasksLock sync.Mutex
+}
+
+func (w *Worker) GetActiveTasks() int {
+	w.activeTasksLock.Lock()
+	defer w.activeTasksLock.Unlock()
+	return w.activeTasks
 }
 
 func (w *Worker) RequestCompletions(cr message.CompletionsRequest, wr http.ResponseWriter, ctx context.Context) error {
+	w.activeTasksLock.Lock()
+	w.activeTasks++
+	w.activeTasksLock.Unlock()
+	defer func() {
+		w.activeTasksLock.Lock()
+		w.activeTasks--
+		w.activeTasksLock.Unlock()
+	}()
+
 	// Request completions from the worker
 	id, err := message.Send[message.CompletionsRequest](w.Mbuf, &message.TypedMessage[message.CompletionsRequest]{
 		Type:    message.MTCompletionsRequest,

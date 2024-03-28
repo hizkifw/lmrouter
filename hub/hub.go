@@ -82,16 +82,17 @@ func (h *Hub) UnregisterWorker(id uuid.UUID) {
 }
 
 func (h *Hub) RequestCompletions(req message.CompletionsRequest, w http.ResponseWriter, ctx context.Context) {
-	// TODO: worker selection, for now just use the first worker
 	if len(h.workers) == 0 {
 		http.Error(w, "No workers available", http.StatusServiceUnavailable)
 		return
 	}
 
-	var worker *Worker
+	// Find the worker with the least active tasks
+	var worker *Worker = nil
 	for _, w := range h.workers {
-		worker = w
-		break
+		if worker == nil || w.GetActiveTasks() < worker.GetActiveTasks() {
+			worker = w
+		}
 	}
 
 	// Request completions from the worker
