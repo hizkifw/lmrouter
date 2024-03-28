@@ -52,6 +52,7 @@ func (w *Worker) RequestCompletions(cr message.CompletionsRequest, wr http.Respo
 	if err != nil {
 		return fmt.Errorf("failed to send completions request to worker: %w", err)
 	}
+	log.Printf("Sending completions request %s to worker %s", id, w.Id)
 
 	// Write headers
 	wr.Header().Set("Cache-Control", "no-cache")

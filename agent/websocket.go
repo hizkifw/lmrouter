@@ -5,16 +5,11 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/gorilla/websocket"
 	"github.com/hizkifw/lmrouter/message"
 )
 
-func initWebsocket(done chan struct{}, conn *websocket.Conn, ctx context.Context) {
+func initWebsocket(done chan struct{}, mb *message.MessageBuffer, ctx context.Context) {
 	defer close(done)
-
-	// Create the MessageBuffer
-	mb := message.NewMessageBuffer(conn)
-	go mb.RecvLoop()
 
 	// Wait for server identification
 	serverInfo, err := message.ReceiveType[message.ServerInfo](mb, message.MTServerInfo, ctx)
@@ -72,11 +67,11 @@ func initWebsocket(done chan struct{}, conn *websocket.Conn, ctx context.Context
 			log.Printf("failed to read completions request: %v", err)
 			return
 		}
-		log.Printf("Received completions request: %#v", req.Message)
+		log.Printf("Received completions request %s", req.Id)
 
 		go func(req message.TypedMessage[message.CompletionsRequest]) {
 			handleCompletions(&req, client, mb)
-			log.Printf("Completed request: %#v", req.Message)
+			log.Printf("Completed request %s", req.Id)
 		}(*req)
 	}
 

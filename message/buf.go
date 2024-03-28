@@ -44,6 +44,18 @@ func (mb *MessageBuffer) RecvLoop() {
 	}
 }
 
+func (mb *MessageBuffer) Close() error {
+	err := mb.conn.WriteMessage(
+		websocket.CloseMessage,
+		websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""),
+	)
+
+	mb.bufferLock.Lock()
+	mb.recvBuffer = nil
+
+	return err
+}
+
 func Send[T any](mb *MessageBuffer, msg *TypedMessage[T]) (string, error) {
 	if msg.Id == "" {
 		msg.Id = NewId()

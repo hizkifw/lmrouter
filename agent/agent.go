@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/hizkifw/lmrouter/message"
 )
 
 func RunAgent(hubAddr string) error {
@@ -25,7 +26,14 @@ func RunAgent(hubAddr string) error {
 	defer conn.Close()
 
 	done := make(chan struct{})
-	go initWebsocket(done, conn, context.Background())
+	conn.SetCloseHandler(func(code int, text string) error {
+		close(done)
+		return nil
+	})
+
+	mb := message.NewMessageBuffer(conn)
+	go mb.RecvLoop()
+	go initWebsocket(done, mb, context.Background())
 
 	for {
 		select {
@@ -34,17 +42,19 @@ func RunAgent(hubAddr string) error {
 		case <-interrupt:
 			log.Println("interrupt")
 
-			// Cleanly close the connection by sending a close message and then
-			// waiting (with timeout) for the server to close the connection.
-			err := conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
+			// Close the connection
+			err := mb.Close()
 			if err != nil {
 				log.Println("write close:", err)
 				return err
 			}
+
+			// Wait for the connection to close
 			select {
 			case <-done:
 			case <-time.After(time.Second):
 			}
+
 			return nil
 		}
 	}

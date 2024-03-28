@@ -73,12 +73,12 @@ func (h *Hub) UnregisterWorker(id uuid.UUID) {
 	h.workersLock.Lock()
 	defer h.workersLock.Unlock()
 
-	if _, ok := h.workers[id]; !ok {
-		return
-	}
+	if worker, ok := h.workers[id]; ok {
+		delete(h.workers, id)
 
-	delete(h.workers, id)
-	log.Printf("Unregistered worker %v", id)
+		worker.Mbuf.Close()
+		log.Printf("Unregistered worker %v", id)
+	}
 }
 
 func (h *Hub) RequestCompletions(req message.CompletionsRequest, w http.ResponseWriter, ctx context.Context) {
@@ -109,6 +109,7 @@ func (h *Hub) RequestCompletions(req message.CompletionsRequest, w http.Response
 			}
 		} else {
 			log.Printf("Failed to request completions: %v", err)
+			http.Error(w, "Failed to request completions", http.StatusInternalServerError)
 		}
 	}
 }
