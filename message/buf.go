@@ -38,9 +38,18 @@ func (mb *MessageBuffer) RecvLoop() {
 			return
 		}
 
-		mb.bufferLock.Lock()
-		mb.recvBuffer[msg.Id] = msg
-		mb.bufferLock.Unlock()
+		inserted := false
+		for !inserted {
+			mb.bufferLock.Lock()
+			if _, ok := mb.recvBuffer[msg.Id]; !ok {
+				mb.recvBuffer[msg.Id] = msg
+				inserted = true
+			}
+			mb.bufferLock.Unlock()
+			if !inserted {
+				time.Sleep(time.Millisecond)
+			}
+		}
 	}
 }
 
@@ -107,7 +116,7 @@ func ReceiveType[T any](mb *MessageBuffer, typ MessageType, ctx context.Context)
 			return nil, ctx.Err()
 		}
 
-		time.Sleep(10 * time.Millisecond)
+		time.Sleep(time.Millisecond)
 	}
 }
 
@@ -125,6 +134,6 @@ func ReceiveId[T any](mb *MessageBuffer, id string, ctx context.Context) (*Typed
 			return nil, ctx.Err()
 		}
 
-		time.Sleep(10 * time.Millisecond)
+		time.Sleep(time.Millisecond)
 	}
 }
