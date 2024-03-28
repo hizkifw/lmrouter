@@ -19,13 +19,22 @@ var upgrader = websocket.Upgrader{
 }
 
 type Worker struct {
-	Id   uuid.UUID
-	Info message.WorkerInfo
+	Id   uuid.UUID          `json:"id"`
+	Info message.WorkerInfo `json:"info"`
 
 	conn            *websocket.Conn
 	mbuf            *message.MessageBuffer
 	activeTasks     int
 	activeTasksLock sync.Mutex
+}
+
+func (w *Worker) HasModel(modelId string) bool {
+	for _, model := range w.Info.AvailableModels {
+		if model.Id == modelId {
+			return true
+		}
+	}
+	return false
 }
 
 func (w *Worker) GetActiveTasks() int {

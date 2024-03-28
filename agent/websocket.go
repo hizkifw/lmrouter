@@ -11,6 +11,15 @@ import (
 func initWebsocket(opts *AgentOpts, done chan struct{}, mb *message.MessageBuffer, ctx context.Context) {
 	defer close(done)
 
+	// Query available models
+	client := &http.Client{}
+	models, err := queryModels(opts, client)
+	if err != nil {
+		log.Printf("failed to query models: %v", err)
+		return
+	}
+	log.Printf("Available models: %v", models)
+
 	// Wait for server identification
 	serverInfo, err := message.ReceiveType[message.ServerInfo](mb, message.MTServerInfo, ctx)
 	if err != nil {
@@ -22,8 +31,11 @@ func initWebsocket(opts *AgentOpts, done chan struct{}, mb *message.MessageBuffe
 
 	// Send worker info
 	id, err := message.Send[message.WorkerInfo](mb, &message.TypedMessage[message.WorkerInfo]{
-		Type:    message.MTWorkerInfo,
-		Message: message.WorkerInfo{WorkerName: opts.WorkerName},
+		Type: message.MTWorkerInfo,
+		Message: message.WorkerInfo{
+			WorkerName:      opts.WorkerName,
+			AvailableModels: models,
+		},
 	})
 	if err != nil {
 		log.Printf("failed to write worker info: %v", err)
@@ -60,7 +72,6 @@ func initWebsocket(opts *AgentOpts, done chan struct{}, mb *message.MessageBuffe
 	}()
 
 	// Wait for completions request
-	client := &http.Client{}
 	for {
 		req, err := message.ReceiveType[message.CompletionsRequest](mb, message.MTCompletionsRequest, ctx)
 		if err != nil {

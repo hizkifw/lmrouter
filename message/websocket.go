@@ -29,5 +29,6 @@ type ServerInfo struct {
 }
 
 type WorkerInfo struct {
-	WorkerName string `json:"worker_name"`
+	WorkerName      string  `json:"worker_name"`
+	AvailableModels []Model `json:"available_models"`
 }

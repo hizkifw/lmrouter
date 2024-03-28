@@ -4,12 +4,37 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
 
 	"github.com/hizkifw/lmrouter/message"
 )
+
+func queryModels(opts *AgentOpts, client *http.Client) ([]message.Model, error) {
+	endpoint := opts.InferenceAddr.JoinPath("/v1/models").String()
+	httpReq, err := http.NewRequest("GET", endpoint, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	resp, err := client.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send request: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("unexpected response status: %s", resp.Status)
+	}
+
+	var models message.ListModelsResponse
+	if err := json.NewDecoder(resp.Body).Decode(&models); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return models.Data, nil
+}
 
 func handleCompletions(
 	opts *AgentOpts, req *message.TypedMessage[message.CompletionsRequest],

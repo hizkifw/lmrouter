@@ -47,6 +47,15 @@ func RunServer(opts *ServerOpts) error {
 		hub.RequestCompletions(req, w, r.Context())
 	})
 
+	// Handle the list models endpoint
+	http.HandleFunc("/v1/models", func(w http.ResponseWriter, r *http.Request) {
+		resp := message.ListModelsResponse{
+			Object: "list",
+			Data:   hub.GetAllModels(),
+		}
+		json.NewEncoder(w).Encode(resp)
+	})
+
 	// Handle the worker websocket endpoint
 	http.HandleFunc("/internal/v1/worker/ws", func(w http.ResponseWriter, r *http.Request) {
 		handleWorkerWS(&hub, w, r)

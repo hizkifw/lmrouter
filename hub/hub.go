@@ -2,6 +2,7 @@ package hub
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/http"
 	"strings"
@@ -27,6 +28,23 @@ func (h *Hub) GetWorkers() []*Worker {
 	}
 
 	return workerList
+}
+
+func (h *Hub) GetAllModels() []message.Model {
+	workersList := h.GetWorkers()
+	models := make([]message.Model, 0)
+	inserted := make(map[string]bool)
+	for _, worker := range workersList {
+		for _, model := range worker.Info.AvailableModels {
+			key := fmt.Sprintf("%s/%s", model.OwnedBy, model.Id)
+			if _, ok := inserted[key]; !ok {
+				models = append(models, model)
+				inserted[key] = true
+			}
+		}
+	}
+	return models
+
 }
 
 func (h *Hub) PingLoop() {
@@ -96,9 +114,18 @@ func (h *Hub) RequestCompletions(req message.CompletionsRequest, w http.Response
 	// Find the worker with the least active tasks
 	var worker *Worker = nil
 	for _, w := range h.workers {
+		if !w.HasModel(req.Model) {
+			continue
+		}
+
 		if worker == nil || w.GetActiveTasks() < worker.GetActiveTasks() {
 			worker = w
 		}
+	}
+
+	if worker == nil {
+		http.Error(w, "No workers available for model", http.StatusServiceUnavailable)
+		return
 	}
 
 	// Request completions from the worker
