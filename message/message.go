@@ -16,10 +16,17 @@ type CompletionsResponse struct {
 	Created int64               `json:"created"`
 	Model   string              `json:"model"`
 	Choices []CompletionsChoice `json:"choices"`
+	Usage   *CompletionsUsage   `json:"usage,omitempty"`
 }
 
 type CompletionsChoice struct {
 	Index        int     `json:"index"`
 	FinishReason *string `json:"finish_reason"`
 	Text         string  `json:"text"`
+}
+
+type CompletionsUsage struct {
+	PromptTokens     int `json:"prompt_tokens"`
+	CompletionTokens int `json:"completion_tokens"`
+	TotalTokens      int `json:"total_tokens"`
 }

@@ -8,7 +8,7 @@ import (
 	"github.com/hizkifw/lmrouter/message"
 )
 
-func initWebsocket(done chan struct{}, mb *message.MessageBuffer, ctx context.Context) {
+func initWebsocket(opts *AgentOpts, done chan struct{}, mb *message.MessageBuffer, ctx context.Context) {
 	defer close(done)
 
 	// Wait for server identification
@@ -18,12 +18,12 @@ func initWebsocket(done chan struct{}, mb *message.MessageBuffer, ctx context.Co
 		return
 	}
 
-	log.Printf("Connecting to server: %#v", serverInfo.Message)
+	log.Printf("Registering to server: %#v", serverInfo.Message)
 
 	// Send worker info
 	id, err := message.Send[message.WorkerInfo](mb, &message.TypedMessage[message.WorkerInfo]{
 		Type:    message.MTWorkerInfo,
-		Message: message.WorkerInfo{WorkerName: "worker1"},
+		Message: message.WorkerInfo{WorkerName: opts.WorkerName},
 	})
 	if err != nil {
 		log.Printf("failed to write worker info: %v", err)
@@ -70,7 +70,7 @@ func initWebsocket(done chan struct{}, mb *message.MessageBuffer, ctx context.Co
 		log.Printf("Received completions request %s", req.Id)
 
 		go func(req message.TypedMessage[message.CompletionsRequest]) {
-			handleCompletions(&req, client, mb)
+			handleCompletions(opts, &req, client, mb)
 			log.Printf("Completed request %s", req.Id)
 		}(*req)
 	}

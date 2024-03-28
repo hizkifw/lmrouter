@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>lmrouter</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      html,
+      body {
+        font-family: Menlo, Consolas, Monaco, Liberation Mono, Lucida Console,
+          monospace;
+        background-color: #222;
+        color: #eee;
+      }
+
+      a {
+        color: rgb(0, 195, 255);
+      }
+    </style>
+  </head>
+  <body>
+    <h1>lmrouter</h1>
+    <p>Available endpoints</p>
+    <ul>
+      <li>
+        <a href="/v1/completions">/v1/completions</a> &mdash; OpenAI-compatible
+        inference endpoint
+      </li>
+      <li>
+        <a href="/internal/v1/workers">/internal/v1/workers</a> &mdash; List all
+        connected workers
+      </li>
+      <li>
+        <a href="/internal/v1/worker/ws">/internal/v1/worker/ws</a> &mdash;
+        Websocket endpoint for workers to connect to
+      </li>
+    </ul>
+  </body>
+</html>

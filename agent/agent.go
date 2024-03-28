@@ -12,14 +12,25 @@ import (
 	"github.com/hizkifw/lmrouter/message"
 )
 
-func RunAgent(hubAddr string) error {
+type AgentOpts struct {
+	// HubAddr is the address of the hub server
+	HubAddr url.URL `arg:"--hub,required" help:"address of the hub server (e.g. ws://localhost:9090)"`
+
+	// InferenceAddr is the address of the inference server
+	InferenceAddr url.URL `arg:"--inference" help:"address of the OpenAI-compatible inference server" default:"http://localhost:5000"`
+
+	// WorkerName is the name of the worker
+	WorkerName string `arg:"--name" help:"name of the worker" default:"worker"`
+}
+
+func RunAgent(opts *AgentOpts) error {
 	interrupt := make(chan os.Signal, 1)
 	signal.Notify(interrupt, os.Interrupt)
 
-	u := url.URL{Scheme: "ws", Host: hubAddr, Path: "/internal/v1/worker/ws"}
-	log.Printf("connecting to %s", u.String())
+	log.Printf("Connecting to %s", opts.HubAddr.String())
 
-	conn, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
+	fullAddr := opts.HubAddr.JoinPath("/internal/v1/worker/ws")
+	conn, _, err := websocket.DefaultDialer.Dial(fullAddr.String(), nil)
 	if err != nil {
 		log.Fatal("dial:", err)
 	}
@@ -33,7 +44,7 @@ func RunAgent(hubAddr string) error {
 
 	mb := message.NewMessageBuffer(conn)
 	go mb.RecvLoop()
-	go initWebsocket(done, mb, context.Background())
+	go initWebsocket(opts, done, mb, context.Background())
 
 	for {
 		select {

@@ -11,7 +11,10 @@ import (
 	"github.com/hizkifw/lmrouter/message"
 )
 
-func handleCompletions(req *message.TypedMessage[message.CompletionsRequest], client *http.Client, mb *message.MessageBuffer) {
+func handleCompletions(
+	opts *AgentOpts, req *message.TypedMessage[message.CompletionsRequest],
+	client *http.Client, mb *message.MessageBuffer,
+) {
 	// Marshal the request into JSON
 	reqBody, err := json.Marshal(req.Message)
 	if err != nil {
@@ -20,7 +23,8 @@ func handleCompletions(req *message.TypedMessage[message.CompletionsRequest], cl
 	}
 
 	// Create a new HTTP request
-	httpReq, err := http.NewRequest("POST", "http://127.0.0.1:5000/v1/completions", bytes.NewBuffer(reqBody))
+	endpoint := opts.InferenceAddr.JoinPath("/v1/completions").String()
+	httpReq, err := http.NewRequest("POST", endpoint, bytes.NewBuffer(reqBody))
 	if err != nil {
 		log.Printf("failed to create request: %v", err)
 		return

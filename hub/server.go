@@ -1,6 +1,7 @@
 package hub
 
 import (
+	_ "embed"
 	"encoding/json"
 	"log"
 	"net/http"
@@ -10,7 +11,15 @@ import (
 	"github.com/hizkifw/lmrouter/message"
 )
 
-func RunServer(addr string) error {
+//go:embed index.html
+var indexHTML []byte
+
+type ServerOpts struct {
+	// Addr is the address to listen on
+	Addr string `arg:"--listen" help:"address to listen on" default:":9090"`
+}
+
+func RunServer(opts *ServerOpts) error {
 	// Create the hub
 	var hub = Hub{
 		workers: make(map[uuid.UUID]*Worker),
@@ -18,6 +27,12 @@ func RunServer(addr string) error {
 
 	// Begin background processes
 	go hub.PingLoop()
+
+	// Index page
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		w.Write(indexHTML)
+	})
 
 	// Handle the completions endpoint
 	http.HandleFunc("/v1/completions", func(w http.ResponseWriter, r *http.Request) {
@@ -37,11 +52,15 @@ func RunServer(addr string) error {
 		handleWorkerWS(&hub, w, r)
 	})
 
+	http.HandleFunc("/internal/v1/workers", func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(hub.GetWorkers())
+	})
+
 	server := &http.Server{
-		Addr:              addr,
+		Addr:              opts.Addr,
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
-	log.Printf("Listening on %s", addr)
+	log.Printf("Listening on %s", opts.Addr)
 	return server.ListenAndServe()
 }

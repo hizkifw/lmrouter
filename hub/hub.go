@@ -17,38 +17,44 @@ type Hub struct {
 	workersLock sync.Mutex
 }
 
+func (h *Hub) GetWorkers() []*Worker {
+	h.workersLock.Lock()
+	defer h.workersLock.Unlock()
+
+	workerList := make([]*Worker, 0, len(h.workers))
+	for _, worker := range h.workers {
+		workerList = append(workerList, worker)
+	}
+
+	return workerList
+}
+
 func (h *Hub) PingLoop() {
 	for {
-		h.workersLock.Lock()
-		workersList := make([]*Worker, 0, len(h.workers))
-		for _, worker := range h.workers {
-			workersList = append(workersList, worker)
-		}
-		h.workersLock.Unlock()
-
+		workersList := h.GetWorkers()
 		for _, worker := range workersList {
-			id, err := message.Send[string](worker.Mbuf, &message.TypedMessage[string]{
+			id, err := message.Send[string](worker.mbuf, &message.TypedMessage[string]{
 				Type:    message.MTPing,
 				Message: "ping",
 			})
 			if err != nil {
 				log.Printf("Failed to send ping to worker %v: %v", worker.Id, err)
-				worker.Conn.Close()
+				worker.conn.Close()
 				h.UnregisterWorker(worker.Id)
 				continue
 			}
 
-			reply, err := message.ReceiveId[string](worker.Mbuf, id, context.Background())
+			reply, err := message.ReceiveId[string](worker.mbuf, id, context.Background())
 			if err != nil {
 				log.Printf("Failed to receive ping reply from worker %v: %v", worker.Id, err)
-				worker.Conn.Close()
+				worker.conn.Close()
 				h.UnregisterWorker(worker.Id)
 				continue
 			}
 
 			if reply.Type != message.MTAck {
 				log.Printf("Invalid ping reply from worker %v: %v", worker.Id, reply)
-				worker.Conn.Close()
+				worker.conn.Close()
 				h.UnregisterWorker(worker.Id)
 				continue
 			}
@@ -62,7 +68,7 @@ func (h *Hub) RegisterWorker(worker *Worker) {
 	h.workersLock.Lock()
 	defer h.workersLock.Unlock()
 	h.workers[worker.Id] = worker
-	worker.Conn.SetCloseHandler(func(code int, text string) error {
+	worker.conn.SetCloseHandler(func(code int, text string) error {
 		h.UnregisterWorker(worker.Id)
 		return nil
 	})
@@ -76,7 +82,7 @@ func (h *Hub) UnregisterWorker(id uuid.UUID) {
 	if worker, ok := h.workers[id]; ok {
 		delete(h.workers, id)
 
-		worker.Mbuf.Close()
+		worker.mbuf.Close()
 		log.Printf("Unregistered worker %v", id)
 	}
 }

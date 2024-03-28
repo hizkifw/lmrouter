@@ -21,9 +21,9 @@ var upgrader = websocket.Upgrader{
 type Worker struct {
 	Id   uuid.UUID
 	Info message.WorkerInfo
-	Conn *websocket.Conn
-	Mbuf *message.MessageBuffer
 
+	conn            *websocket.Conn
+	mbuf            *message.MessageBuffer
 	activeTasks     int
 	activeTasksLock sync.Mutex
 }
@@ -45,7 +45,7 @@ func (w *Worker) RequestCompletions(cr message.CompletionsRequest, wr http.Respo
 	}()
 
 	// Request completions from the worker
-	id, err := message.Send[message.CompletionsRequest](w.Mbuf, &message.TypedMessage[message.CompletionsRequest]{
+	id, err := message.Send[message.CompletionsRequest](w.mbuf, &message.TypedMessage[message.CompletionsRequest]{
 		Type:    message.MTCompletionsRequest,
 		Message: cr,
 	})
@@ -67,7 +67,7 @@ func (w *Worker) RequestCompletions(cr message.CompletionsRequest, wr http.Respo
 	processing := true
 	headersSent := false
 	for processing {
-		resp, err := message.ReceiveId[message.CompletionsResponse](w.Mbuf, id, ctx)
+		resp, err := message.ReceiveId[message.CompletionsResponse](w.mbuf, id, ctx)
 		if err != nil {
 			return fmt.Errorf("failed to read response from worker: %w", err)
 		}
@@ -149,8 +149,8 @@ func handleWorkerWS(hub *Hub, w http.ResponseWriter, r *http.Request) {
 	worker := &Worker{
 		Id:   uuid.New(),
 		Info: info.Message,
-		Conn: conn,
-		Mbuf: mb,
+		conn: conn,
+		mbuf: mb,
 	}
 	hub.RegisterWorker(worker)
 
