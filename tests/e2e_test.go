@@ -1,11 +1,14 @@
 package tests
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/url"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -44,20 +47,53 @@ func dummyInferenceServer(addr string, ctx context.Context) {
 		}
 
 		finishReason := "length"
-		resp := message.CompletionsResponse{
-			ID:      "cmpl-0000",
-			Object:  "text_completion",
-			Created: (time.Now().UnixMilli()),
-			Choices: []message.CompletionsChoice{
-				{
-					Text:         "Hello, world!",
-					Index:        0,
-					FinishReason: &finishReason,
-				},
-			},
-			Model: "gpt-2",
+
+		if !req.Stream {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			json.NewEncoder(w).Encode(
+				message.CompletionsResponse{
+					ID:      "cmpl-0000",
+					Object:  "text_completion",
+					Created: (time.Now().UnixMilli()),
+					Choices: []message.CompletionsChoice{
+						{
+							Text:         "Hello, world!",
+							Index:        0,
+							FinishReason: &finishReason,
+						},
+					},
+					Model: "gpt-2",
+				})
+			return
 		}
-		json.NewEncoder(w).Encode(resp)
+
+		// Streaming response
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.Header().Set("Connection", "keep-alive")
+		w.WriteHeader(http.StatusOK)
+		tokens := strings.Split("lmrouter is a language model router", " ")
+		encoder := json.NewEncoder(w)
+		for _, token := range tokens {
+			w.Write([]byte("data: "))
+			encoder.Encode(message.CompletionsResponse{
+				ID:      "cmpl-0000",
+				Object:  "text_completion",
+				Created: (time.Now().UnixMilli()),
+				Choices: []message.CompletionsChoice{
+					{
+						Text:         token,
+						Index:        0,
+						FinishReason: nil,
+					},
+				},
+			})
+			w.Write([]byte("\n")) // json encoder already adds a newline
+			if f, ok := w.(http.Flusher); ok {
+				f.Flush()
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
 	})
 
 	server := &http.Server{
@@ -159,6 +195,38 @@ func TestE2E(t *testing.T) {
 	resp, err = http.Post(hubUrl.JoinPath("/v1/completions").String(), "application/json", bytes.NewReader(enc))
 	assert.NoError(err)
 	assert.Equal(http.StatusServiceUnavailable, resp.StatusCode)
+
+	// Streaming response should work
+	req = message.CompletionsRequest{Model: "gpt-2", Prompt: "lmrouter is", Stream: true}
+	enc, err = json.Marshal(req)
+	assert.NoError(err)
+	resp, err = http.Post(hubUrl.JoinPath("/v1/completions").String(), "application/json", bytes.NewReader(enc))
+	assert.NoError(err)
+	assert.Equal(http.StatusOK, resp.StatusCode)
+	reader := bufio.NewReader(resp.Body)
+	parts := 0
+	lastTime := time.Now()
+	for {
+		line, err := reader.ReadString('\n')
+		if err == io.EOF {
+			break
+		}
+		assert.NoError(err)
+		if len(line) < 6 {
+			continue
+		}
+		parts++
+		assert.True(strings.HasPrefix(line, "data: "))
+		resp := message.CompletionsResponse{}
+		assert.NoError(json.Unmarshal([]byte(line[6:]), &resp))
+		createdTime := time.Unix(0, int64(resp.Created)*int64(time.Millisecond))
+		assert.WithinDuration(time.Now(), createdTime, 10*time.Millisecond)
+		if parts > 1 {
+			assert.WithinDuration(createdTime, lastTime.Add(10*time.Millisecond), 5*time.Millisecond)
+		}
+		lastTime = createdTime
+	}
+	assert.Equal(6, parts)
 
 	// Close the agent and test that it disconnected
 	cancelAgent()

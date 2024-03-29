@@ -38,19 +38,20 @@ func (mb *MessageBuffer) RecvLoop() {
 			return
 		}
 
-		inserted := false
-		for !inserted {
-			mb.bufferLock.Lock()
-			if _, ok := mb.recvBuffer[msg.Id]; !ok {
-				mb.recvBuffer[msg.Id] = msg
-				inserted = true
-			}
-			mb.bufferLock.Unlock()
-			if !inserted {
-				time.Sleep(time.Millisecond)
-			}
+		for !mb.tryInsert(msg) {
+			time.Sleep(time.Millisecond)
 		}
 	}
+}
+
+func (mb *MessageBuffer) tryInsert(msg *TypedMessage[json.RawMessage]) bool {
+	mb.bufferLock.Lock()
+	defer mb.bufferLock.Unlock()
+	if _, ok := mb.recvBuffer[msg.Id]; ok {
+		return false
+	}
+	mb.recvBuffer[msg.Id] = msg
+	return true
 }
 
 func (mb *MessageBuffer) Close() error {
