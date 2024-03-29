@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
@@ -40,19 +41,20 @@ func main() {
 		os.Exit(1)
 	}
 
+	ctx := context.Background()
 	subcommand := os.Args[1]
 	if subcommand == "server" {
 		opts := hub.ServerOpts{}
 		mustParseArgs(&opts)
 
-		if err := hub.RunServer(&opts); err != nil {
+		if err := hub.RunServer(&opts, ctx); err != nil {
 			panic(err)
 		}
 	} else if subcommand == "agent" {
 		opts := agent.AgentOpts{}
 		mustParseArgs(&opts)
 
-		if err := agent.RunAgent(&opts); err != nil {
+		if err := agent.RunAgent(&opts, ctx); err != nil {
 			panic(err)
 		}
 	}

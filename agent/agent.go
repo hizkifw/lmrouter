@@ -27,7 +27,10 @@ type AgentOpts struct {
 	WorkerName string `arg:"--name" help:"name of the worker" default:"worker"`
 }
 
-func RunAgent(opts *AgentOpts) error {
+func RunAgent(opts *AgentOpts, ctx context.Context) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
 	interrupt := make(chan os.Signal, 1)
 	signal.Notify(interrupt, os.Interrupt)
 
@@ -48,13 +51,15 @@ func RunAgent(opts *AgentOpts) error {
 
 	mb := message.NewMessageBuffer(conn)
 	go mb.RecvLoop()
-	go initWebsocket(opts, done, mb, context.Background())
+	go initWebsocket(opts, done, mb, ctx)
 
 	for {
 		select {
 		case <-done:
 			return nil
 		case <-interrupt:
+			cancel()
+		case <-ctx.Done():
 			log.Println("interrupt")
 
 			// Close the connection
